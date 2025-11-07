@@ -1,0 +1,53 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net6.0;net8.0</TargetFrameworks>
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+    <Nullable>enable</Nullable>
+    
+    <!-- Package Information -->
+    <PackageId>MindBoiling.APIMindmap</PackageId>
+    <Version>2.0.4</Version>
+    <Authors>Karan Pargaien</Authors>
+    <Company>MindBoiling</Company>
+    <Product>API Mindmap</Product>
+    <Description>Advanced API visualization dashboard for ASP.NET Core 6.0+ APIs. Features include multiple view modes (mindmap, tree, dependency, table, matrix, dashboard), dark/light themes, comprehensive export options (PNG, SVG, PDF, CSV, JSON, Markdown), keyboard shortcuts, and deep insights into your API architecture. Transform your API documentation with interactive visualizations.</Description>
+    <PackageTags>aspnetcore;api;visualization;swagger;mindmap;documentation;asp.net-core;rest-api;openapi;endpoints;dto;controllers;webapi;microservices;api-documentation;dashboard;charts;d3js</PackageTags>
+    <Copyright>Copyright © 2025 Karan Pargaien</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/karanpargaien-tz/APIMindmap</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/karanpargaien-tz/APIMindmap</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageReleaseNotes>Version 2.0 - Major upgrade with multiple visualization modes, dark/light themes, comprehensive export options, keyboard shortcuts, and advanced API insights dashboard</PackageReleaseNotes>
+    
+    <!-- Build Configuration -->
+    <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    
+    <!-- Source Link Support for debugging -->
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="wwwroot\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="6.0.0" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

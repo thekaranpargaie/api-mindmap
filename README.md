@@ -323,7 +323,7 @@ When using `UseApiMindmap().WithDbAnalyzer<T>()`, the following endpoints are au
 
 | Endpoint | Description | Response |
 |----------|-------------|----------|
-| `/mindmap/index.html` | Main UI (auto-detects DB analyzer) | HTML |
+| `/mindmap/mindmap/index.html` | Main UI (auto-detects DB analyzer) | HTML |
 | `/mindmap/index.json` | API structure (controllers, methods, DTOs) | JSON |
 | `/mindmap/database.json` | Database schema (entities, relationships) | JSON |
 | `/mindmap/config.json` | Configuration settings | JSON |

@@ -1,3 +1,5 @@
+using System;
+
 namespace APIMindmap.Models
 {
     /// <summary>
@@ -36,5 +38,17 @@ namespace APIMindmap.Models
         /// Default: true
         /// </summary>
         public bool EnableCaching { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets whether the Database Analyzer feature is enabled.
+        /// This is set automatically when WithDbAnalyzer() is called.
+        /// </summary>
+        public bool EnableDatabaseAnalyzer { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets the DbContext type used for database analysis.
+        /// This is set automatically when WithDbAnalyzer() is called.
+        /// </summary>
+        internal Type? DbContextType { get; set; }
     }
 }

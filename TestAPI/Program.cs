@@ -1,4 +1,6 @@
 using APIMindmap.Extensions;
+using Microsoft.EntityFrameworkCore;
+using TestAPI.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -6,6 +8,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Add DbContext using in-memory database for testing
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseInMemoryDatabase("TestDatabase"));
 
 var app = builder.Build();
 
@@ -16,14 +22,12 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-// Add API Mindmap UI - serves static files at /mindmap
-app.UseApiMindmapUI();
-
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
 
-// Map API Mindmap data endpoint - available at /api/mindmap
-app.MapApiMindmap();
+// Use new v3 unified API with Database Analyzer
+app.UseApiMindmap()
+   .WithDbAnalyzer<ApplicationDbContext>();
 
 app.Run();

@@ -13,18 +13,7 @@
 🔍 **Auto-Detection** — Database tab appears automatically when analyzer is enabled  
 📊 **Smart Schema Analysis** — Detects entities, relationships, join tables, and cardinality  
 🎨 **Interactive Graph** — Color-coded entities and relationships with D3.js  
-♻️ **Backward Compatible** — Existing v2 code continues to work  
-
-## ✨ What's New in v2.0
-
-🎨 **Modern UI** — TailwindCSS-based design with Lucide icons  
-🌓 **Dark/Light Mode** — Toggle between themes with one click  
-📊 **6 Visualization Modes** — Mindmap, Tree, Dependency, Table, Matrix, Dashboard  
-💾 **Comprehensive Export** — PNG, SVG, PDF, CSV, JSON, Markdown  
-⌨️ **Keyboard Shortcuts** — Ctrl+/-, R, F, / for efficient navigation  
-📈 **Advanced Insights** — Top DTOs, controller metrics, HTTP method distribution  
-⚙️ **Configurable** — Customize default view, theme, and features  
-🚀 **Performance Optimized** — D3.js force simulation for large APIs  
+🚀 **One-Line Setup** — Replaces previous two-method approach with unified fluent API
 
 ## 🎯 Features
 
@@ -47,9 +36,31 @@
 dotnet add package MindBoiling.APIMindmap
 ```
 
-### v3 Unified API (Recommended)
+### Basic Setup
 
-Use the new unified API for both API visualization and Database Analyzer:
+Add one line to your `Program.cs`:
+
+```csharp
+using APIMindmap.Extensions;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add your services
+builder.Services.AddControllers();
+
+var app = builder.Build();
+
+app.MapControllers();
+
+// 👇 One-line setup
+app.UseApiMindmap();
+
+app.Run();
+```
+
+### With Database Analyzer
+
+Add Entity Framework DbContext visualization:
 
 ```csharp
 using APIMindmap.Extensions;
@@ -68,34 +79,9 @@ var app = builder.Build();
 
 app.MapControllers();
 
-// 👇 One-line setup with Database Analyzer
+// 👇 Setup with Database Analyzer
 app.UseApiMindmap()
    .WithDbAnalyzer<ApplicationDbContext>();
-
-app.Run();
-```
-
-### v2 Basic Integration (Still Supported)
-
-Add these two lines to your `Program.cs`:
-
-```csharp
-using APIMindmap.Extensions;
-
-var builder = WebApplication.CreateBuilder(args);
-
-// Add your services
-builder.Services.AddControllers();
-
-var app = builder.Build();
-
-// 👇 Add API Mindmap UI (serves static files)
-app.UseApiMindmapUI();
-
-app.MapControllers();
-
-// 👇 Add API Mindmap data endpoint
-app.MapApiMindmap();
 
 app.Run();
 ```
@@ -105,13 +91,23 @@ app.Run();
 Customize the behavior with options:
 
 ```csharp
-app.UseApiMindmapUI(options =>
+app.UseApiMindmap(options =>
 {
     options.DefaultView = "dashboard";  // Start with dashboard view
     options.Theme = "dark";             // Use dark theme by default
     options.EnableExport = true;        // Enable export features
     options.Title = "My API Explorer";  // Custom title
 });
+
+// Or combine with Database Analyzer
+app.UseApiMindmap(options =>
+{
+    options.DefaultView = "database";  // Start with database view
+    options.Theme = "dark";            // Use dark theme by default
+    options.EnableExport = true;       // Enable export features
+    options.Title = "My API Explorer"; // Custom title
+})
+.WithDbAnalyzer<ApplicationDbContext>();
 ```
 
 ### Usage
@@ -258,7 +254,15 @@ API Mindmap automatically discovers and visualizes:
 Customize API Mindmap behavior with options:
 
 ```csharp
-// v3 API with options
+// Basic configuration
+app.UseApiMindmap(options => {
+    options.DefaultView = "dashboard";  // Start with dashboard view
+    options.Theme = "dark";             // Use dark theme by default
+    options.EnableExport = true;        // Enable export features
+    options.Title = "My API Explorer";  // Custom title
+});
+
+// Configuration with Database Analyzer
 app.UseApiMindmap(options => {
     options.DefaultView = "database";  // Start with database view
     options.Theme = "dark";            // Use dark theme by default
@@ -266,15 +270,6 @@ app.UseApiMindmap(options => {
     options.Title = "My API Explorer"; // Custom title
 })
 .WithDbAnalyzer<ApplicationDbContext>();
-
-// v2 API (legacy)
-app.UseApiMindmapUI(options => {
-    options.DefaultView = "mindmap";
-    options.Theme = "light";
-    options.EnableExport = true;
-    options.Title = "API Mindmap";
-    options.EnableCaching = true;
-});
 ```
 
 **Available Options:**

@@ -5,6 +5,16 @@
 <img width="1902" height="898" alt="Screenshot 2025-11-10 111220" src="https://github.com/user-attachments/assets/dfd45642-0a22-47aa-bbbb-33538f58ddaa" />
 
 
+## ✨ What's New in v3.0
+
+🗄️ **Database Analyzer** — Visualize your database schema from Entity Framework DbContext  
+🔗 **Unified API** — Single fluent call: `app.UseApiMindmap().WithDbAnalyzer<TDbContext>()`  
+🌐 **Simplified Routes** — `/mindmap/index.json` and `/mindmap/database.json`  
+🔍 **Auto-Detection** — Database tab appears automatically when analyzer is enabled  
+📊 **Smart Schema Analysis** — Detects entities, relationships, join tables, and cardinality  
+🎨 **Interactive Graph** — Color-coded entities and relationships with D3.js  
+♻️ **Backward Compatible** — Existing v2 code continues to work  
+
 ## ✨ What's New in v2.0
 
 🎨 **Modern UI** — TailwindCSS-based design with Lucide icons  
@@ -21,8 +31,9 @@
 ✅ **One-line setup** — like Swagger UI  
 ✅ Works with **any ASP.NET Core 6+ microservice**  
 ✅ Generates **live, up-to-date API structure**  
-✅ **6 visualization views** for different perspectives  
+✅ **7 visualization views** for different perspectives (including Database)  
 ✅ **Interactive visualizations** with zoom, pan, drag, and search  
+✅ **Database schema visualization** from Entity Framework DbContext  
 ✅ **Professional exports** with metadata and legends  
 ✅ **Dark/Light theme** support  
 ✅ **Keyboard shortcuts** for power users  
@@ -36,7 +47,35 @@
 dotnet add package MindBoiling.APIMindmap
 ```
 
-### Basic Integration
+### v3 Unified API (Recommended)
+
+Use the new unified API for both API visualization and Database Analyzer:
+
+```csharp
+using APIMindmap.Extensions;
+using Microsoft.EntityFrameworkCore;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add your services
+builder.Services.AddControllers();
+
+// Add your DbContext
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+var app = builder.Build();
+
+app.MapControllers();
+
+// 👇 One-line setup with Database Analyzer
+app.UseApiMindmap()
+   .WithDbAnalyzer<ApplicationDbContext>();
+
+app.Run();
+```
+
+### v2 Basic Integration (Still Supported)
 
 Add these two lines to your `Program.cs`:
 
@@ -80,10 +119,11 @@ app.UseApiMindmapUI(options =>
 Now visit:
 - **`/swagger`** → traditional API documentation
 - **`/mindmap/mindmap/index.html`** → interactive API insight dashboard
+- **Database tab** → appears automatically when `WithDbAnalyzer()` is used
 
 ## 🎨 Visualization Modes
 
-API Mindmap provides 6 different views to explore your API from multiple angles:
+API Mindmap provides 7 different views to explore your API and database from multiple angles:
 
 ### 🧠 Mindmap View (Default)
 Interactive force-directed graph showing controllers, methods, and DTOs with their relationships. Perfect for understanding the overall structure at a glance.
@@ -136,6 +176,31 @@ Statistical overview with interactive charts showing API metrics.
 - Top Controllers by method count (bar chart)
 - HTTP Methods Distribution (pie chart)
 - Most Used DTOs (horizontal bar chart)
+
+### 🗄️ Database Analyzer View (v3)
+Interactive database schema visualization extracted from Entity Framework DbContext. **Automatically appears when `WithDbAnalyzer()` is configured.**
+
+**Features:**
+- Force-directed graph layout showing entities and relationships
+- Smart join table detection (many-to-many relationships)
+- Color-coded nodes:
+  - 🟣 **Purple**: Regular entities (tables)
+  - 💗 **Pink**: Join tables (composite keys)
+  - 🟢 **Green**: Views (future support)
+- Relationship type visualization:
+  - 🔵 **Blue links**: One-to-one relationships
+  - 🟠 **Orange links**: One-to-many relationships
+  - 🔴 **Red links**: Many-to-many relationships
+- Interactive tooltips showing table details, columns, and keys
+- Drag nodes, zoom, and pan for large schemas
+- Compatible with EF Core 6.0, 7.0, and 8.0
+
+**Example:**
+```csharp
+// Configure in Program.cs
+app.UseApiMindmap()
+   .WithDbAnalyzer<YourDbContext>();
+```
 
 ## 💾 Export Options
 
@@ -190,12 +255,33 @@ API Mindmap automatically discovers and visualizes:
 
 ## 🔧 Configuration Options
 
-Customize API Mindmap behavior through the `UseApiMindmapUI` options:
+Customize API Mindmap behavior with options:
 
+```csharp
+// v3 API with options
+app.UseApiMindmap(options => {
+    options.DefaultView = "database";  // Start with database view
+    options.Theme = "dark";            // Use dark theme by default
+    options.EnableExport = true;       // Enable export features
+    options.Title = "My API Explorer"; // Custom title
+})
+.WithDbAnalyzer<ApplicationDbContext>();
+
+// v2 API (legacy)
+app.UseApiMindmapUI(options => {
+    options.DefaultView = "mindmap";
+    options.Theme = "light";
+    options.EnableExport = true;
+    options.Title = "API Mindmap";
+    options.EnableCaching = true;
+});
+```
+
+**Available Options:**
 ```csharp
 public class ApiMindmapOptions
 {
-    /// Options: "mindmap", "tree", "dependency", "table", "matrix", "dashboard"
+    /// Options: "mindmap", "tree", "dependency", "table", "matrix", "dashboard", "database"
     public string DefaultView { get; set; } = "mindmap";
     
     /// Options: "light", "dark", "auto"
@@ -209,19 +295,97 @@ public class ApiMindmapOptions
     
     /// Enable client-side caching
     public bool EnableCaching { get; set; } = true;
+    
+    /// Enable Database Analyzer (set automatically by WithDbAnalyzer)
+    public bool EnableDatabaseAnalyzer { get; set; } = false;
+}
+```
+
+## 🗄️ Database Analyzer API Reference (v3)
+
+The Database Analyzer extension provides a fluent API for seamless DbContext integration:
+
+### Setup Methods
+
+```csharp
+// Primary v3 API - Unified setup
+IEndpointRouteBuilder.UseApiMindmap(Action<ApiMindmapOptions>? options = null)
+    → Returns ApiMindmapBuilder for chaining
+
+// Database Analyzer extension
+ApiMindmapBuilder.WithDbAnalyzer<TDbContext>() where TDbContext : DbContext
+    → Enables database schema visualization
+```
+
+### Endpoints Created
+
+When using `UseApiMindmap().WithDbAnalyzer<T>()`, the following endpoints are automatically registered:
+
+| Endpoint | Description | Response |
+|----------|-------------|----------|
+| `/mindmap/index.html` | Main UI (auto-detects DB analyzer) | HTML |
+| `/mindmap/index.json` | API structure (controllers, methods, DTOs) | JSON |
+| `/mindmap/database.json` | Database schema (entities, relationships) | JSON |
+| `/mindmap/config.json` | Configuration settings | JSON |
+| `/api/mindmap` | Legacy API structure endpoint | JSON |
+
+### Database Schema Response Format
+
+```json
+{
+  "nodes": [
+    {
+      "id": "Entity.User",
+      "type": "entity",
+      "description": "User",
+      "metadata": {
+        "entityName": "User",
+        "tableName": "Users",
+        "schema": "dbo",
+        "isJoinTable": false,
+        "columns": [
+          {
+            "name": "Id",
+            "type": "Int32",
+            "isNullable": false,
+            "isPrimaryKey": true,
+            "isForeignKey": false
+          }
+        ],
+        "primaryKeys": ["Id"]
+      }
+    }
+  ],
+  "links": [
+    {
+      "source": "Entity.Order",
+      "target": "Entity.User",
+      "type": "one-to-many",
+      "metadata": {
+        "foreignKeyName": "FK_Orders_Users",
+        "foreignKeyColumns": ["UserId"],
+        "principalKeyColumns": ["Id"],
+        "isRequired": true,
+        "deleteAction": "Restrict"
+      }
+    }
+  ]
 }
 ```
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────┐
-│ Your .NET Microservice API │
-├─────────────────────────────┤
-│ EndpointScanner Middleware  │  ← Uses reflection to map all routes, DTOs, dependencies
-│ MindmapController (/api/mindmap)
-│ Embedded StaticFile Server (/mindmap)
-└─────────────────────────────┘
+┌─────────────────────────────────────┐
+│   Your .NET Microservice API        │
+├─────────────────────────────────────┤
+│ EndpointScanner    (API discovery)  │
+│ DbContextScanner   (DB analysis)    │  ← v3 Extension
+│ Endpoints:                          │
+│  • /mindmap/index.json              │
+│  • /mindmap/database.json           │  ← v3 Endpoint
+│  • /mindmap/index.html              │
+└─────────────────────────────────────┘
 ```
 
 ## 📁 Project Structure

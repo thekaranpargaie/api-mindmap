@@ -384,7 +384,7 @@ When using `UseApiMindmap().WithDbAnalyzer<T>()`, the following endpoints are au
 │ Endpoints:                          │
 │  • /mindmap/index.json              │
 │  • /mindmap/database.json           │  ← v3 Endpoint
-│  • /mindmap/index.html              │
+│  • /mindmap/mindmap/index.html              │
 └─────────────────────────────────────┘
 ```
 

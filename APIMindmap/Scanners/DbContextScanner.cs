@@ -37,7 +37,7 @@ namespace APIMindmap.Scanners
                     continue;
 
                 var entityName = entityType.ClrType.Name;
-                var tableName = entityType.GetTableName() ?? entityName;
+                var tableName = GetTableName(entityType);
                 var entityId = $"Entity.{entityName}";
 
                 if (processedEntities.Contains(entityId))
@@ -76,7 +76,7 @@ namespace APIMindmap.Scanners
                     {
                         { "entityName", entityName },
                         { "tableName", tableName },
-                        { "schema", entityType.GetSchema() ?? "dbo" },
+                        { "schema", GetSchemaName(entityType) },
                         { "isJoinTable", isJoinTable },
                         { "columns", columns },
                         { "primaryKeys", primaryKeys }
@@ -122,6 +122,9 @@ namespace APIMindmap.Scanners
                     .Select(p => p.Name)
                     .ToList();
 
+                // Get constraint name with fallback
+                var constraintName = GetConstraintName(foreignKey);
+
                 // Add relationship link
                 var linkId = $"{sourceEntityId}->{principalEntityId}";
                 if (!schema.Links.Any(l => 
@@ -135,7 +138,7 @@ namespace APIMindmap.Scanners
                         Type = relationshipType,
                         Metadata = new Dictionary<string, object>
                         {
-                            { "foreignKeyName", foreignKey.GetConstraintName() ?? "" },
+                            { "foreignKeyName", constraintName },
                             { "foreignKeyColumns", foreignKeyProperties },
                             { "principalKeyColumns", principalKeyProperties },
                             { "isRequired", isRequired },
@@ -171,6 +174,46 @@ namespace APIMindmap.Scanners
         {
             // Check if the dependent entity is a join table
             return IsJoinTable(foreignKey.DeclaringEntityType);
+        }
+
+        private string GetTableName(IEntityType entityType)
+        {
+            // Try to get the table name, with fallback to entity name
+            try
+            {
+                var tableName = entityType.GetTableName();
+                return tableName ?? entityType.ClrType.Name;
+            }
+            catch
+            {
+                return entityType.ClrType.Name;
+            }
+        }
+
+        private string GetSchemaName(IEntityType entityType)
+        {
+            // Try to get the schema name, with fallback to "dbo"
+            try
+            {
+                return entityType.GetSchema() ?? "dbo";
+            }
+            catch
+            {
+                return "dbo";
+            }
+        }
+
+        private string GetConstraintName(IForeignKey foreignKey)
+        {
+            // Try to get the constraint name, with fallback
+            try
+            {
+                return foreignKey.GetConstraintName() ?? $"FK_{foreignKey.DeclaringEntityType.ClrType.Name}_{foreignKey.PrincipalEntityType.ClrType.Name}";
+            }
+            catch
+            {
+                return $"FK_{foreignKey.DeclaringEntityType.ClrType.Name}_{foreignKey.PrincipalEntityType.ClrType.Name}";
+            }
         }
     }
 }

@@ -1347,3 +1347,98 @@ svg:active {
         --color-text-primary: #f1f5f9;
     }
 }
+
+/* Database View Specific Styles */
+.db-table-node {
+    cursor: pointer;
+}
+
+.db-table-header {
+    fill: var(--color-primary);
+    stroke: var(--color-border-primary);
+    stroke-width: 2px;
+    rx: 8px;
+}
+
+.db-table-body {
+    fill: var(--color-bg-secondary);
+    stroke: var(--color-border-primary);
+    stroke-width: 1px;
+}
+
+.db-table-row {
+    fill: var(--color-bg-primary);
+}
+
+.db-table-row:nth-child(even) {
+    fill: var(--color-bg-secondary);
+}
+
+.db-table-row-hover:hover {
+    fill: var(--color-bg-hover);
+}
+
+.db-table-text {
+    fill: var(--color-text-primary);
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    pointer-events: none;
+}
+
+.db-table-header-text {
+    fill: white;
+    font-size: 13px;
+    font-weight: 600;
+    pointer-events: none;
+}
+
+.db-column-divider {
+    stroke: var(--color-border-primary);
+    stroke-width: 1px;
+}
+
+.db-pk-icon {
+    fill: var(--color-warning);
+}
+
+.db-fk-icon {
+    fill: var(--color-info);
+}
+
+.db-join-table-header {
+    fill: var(--color-secondary);
+}
+
+.db-connection-line {
+    stroke: var(--color-border-tertiary);
+    stroke-width: 2px;
+    stroke-opacity: 0.6;
+    fill: none;
+    marker-end: url(#arrowhead);
+}
+
+.db-connection-line.one-to-one {
+    stroke: var(--color-info);
+    stroke-dasharray: none;
+}
+
+.db-connection-line.one-to-many {
+    stroke: var(--color-warning);
+    stroke-dasharray: none;
+}
+
+.db-connection-line.many-to-many {
+    stroke: var(--color-error);
+    stroke-dasharray: 5, 5;
+}
+
+.db-connection-line:hover {
+    stroke-width: 3px;
+    stroke-opacity: 1;
+}
+
+.db-connection-label {
+    fill: var(--color-text-tertiary);
+    font-size: 9px;
+    pointer-events: none;
+}

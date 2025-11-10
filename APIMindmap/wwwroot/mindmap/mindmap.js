@@ -9,6 +9,7 @@ let nodes = [];
 let links = [];
 let scale = 1;
 let currentTransform = { x: 0, y: 0, k: 1 };
+let databaseViewMode = 'quick'; // 'quick' or 'detail'
 
 // Initialize on page load
 document.addEventListener('DOMContentLoaded', () => {
@@ -256,24 +257,30 @@ function switchView(viewName) {
 // Update toolbar buttons based on current view
 function updateToolbarForView(viewName) {
     const graphControls = document.getElementById('graphControls');
+    const databaseControls = document.getElementById('databaseControls');
     const tableControls = document.getElementById('tableControls');
     const svgExportItems = document.querySelectorAll('.export-svg-only');
     
     // Graph views (mindmap, tree, dependency, database) show zoom controls
-    const isGraphView = ['mindmap', 'tree', 'dependency', 'database'].includes(viewName);
+    const isGraphView = ['mindmap', 'tree', 'dependency'].includes(viewName);
+    const isDatabaseView = viewName === 'database';
     const isTableView = viewName === 'table';
     
     if (graphControls) {
         graphControls.style.display = isGraphView ? 'flex' : 'none';
     }
     
+    if (databaseControls) {
+        databaseControls.style.display = isDatabaseView ? 'flex' : 'none';
+    }
+    
     if (tableControls) {
         tableControls.style.display = isTableView ? 'flex' : 'none';
     }
     
-    // SVG export only available for graph views
+    // SVG export only available for graph views and database view
     svgExportItems.forEach(item => {
-        item.style.display = isGraphView ? 'flex' : 'none';
+        item.style.display = (isGraphView || isDatabaseView) ? 'flex' : 'none';
     });
     
     // Reinitialize Lucide icons after DOM changes
@@ -1122,14 +1129,13 @@ function exportAsMarkdown() {
             methodLinks.forEach(link => {
                 const method = mindmapData.nodes.find(n => n.id === link.target);
                 if (method) {
-                    md += `- **${method.metadata?.httpMethod || ''}** \`${method.metadata?.route || ''}\` - ${method.metadata?.actionName || ''}\n`;
+                    md += `- **${method.metadata?.httpMethod || ''}** \`${method.metadata?.route || ''}\`\n`;
                 }
             });
-            md += '\n';
         });
         
         const blob = new Blob([md], { type: 'text/markdown' });
-        saveAs(blob, `api-mindmap-${Date.now()}.md`);
+        saveAs(blob, `api-mindmap-report-${Date.now()}.md`);
     } catch (error) {
         console.error('Markdown export error:', error);
         alert('Failed to export as Markdown. Please try again.');
@@ -1195,6 +1201,12 @@ function setupEventListeners() {
     const resetBtn = document.getElementById('resetBtn');
     if (resetBtn) {
         resetBtn.addEventListener('click', resetView);
+    }
+    
+    // Database view toggle
+    const dbViewToggle = document.getElementById('dbViewToggle');
+    if (dbViewToggle) {
+        dbViewToggle.addEventListener('click', toggleDatabaseViewMode);
     }
     
     // Export menu
@@ -1454,8 +1466,36 @@ async function checkDatabaseAnalyzer() {
     return false;
 }
 
+// Toggle between Quick and Detail database view modes
+function toggleDatabaseViewMode() {
+    databaseViewMode = databaseViewMode === 'quick' ? 'detail' : 'quick';
+    
+    // Update button text
+    const toggleText = document.getElementById('dbViewToggleText');
+    if (toggleText) {
+        toggleText.textContent = databaseViewMode === 'quick' ? 'Detail View' : 'Quick View';
+    }
+    
+    // Re-render the database view
+    renderDatabaseView();
+    
+    // Reinitialize icons
+    lucide.createIcons();
+}
+
 // Render Database View
 function renderDatabaseView() {
+    if (!databaseData) return;
+    
+    if (databaseViewMode === 'quick') {
+        renderDatabaseViewQuick();
+    } else {
+        renderDatabaseViewDetail();
+    }
+}
+
+// Render Database View - Quick Mode (Current Implementation)
+function renderDatabaseViewQuick() {
     if (!databaseData) return;
     
     const svg = d3.select('#databaseCanvas');
@@ -1547,62 +1587,24 @@ function renderDatabaseView() {
     node.append('circle')
         .attr('r', d => d.type === 'join_table' ? 25 : 35)
         .attr('fill', d => colorScale[d.type] || '#8b5cf6')
-        .attr('stroke', '#ffffff')
-        .attr('stroke-width', 2);
+        .on('mouseover', showNodeTooltip)
+        .on('mouseout', hideTooltip)
+        .on('click', highlightNode);
     
-    // Add icons to nodes based on type
     node.append('text')
+        .attr('dy', d => d.radius + 15)
         .attr('text-anchor', 'middle')
-        .attr('dy', -5)
-        .attr('font-size', d => d.type === 'join_table' ? '16px' : '20px')
-        .attr('fill', '#ffffff')
         .text(d => {
-            if (d.type === 'join_table') return '⚡';
-            if (d.type === 'view') return '👁';
-            return '📊';
-        });
-    
-    // Add labels to nodes
-    node.append('text')
-        .attr('text-anchor', 'middle')
-        .attr('dy', 45)
-        .attr('font-size', '12px')
-        .attr('font-weight', 'bold')
-        .attr('fill', currentTheme === 'dark' ? '#ffffff' : '#1f2937')
-        .text(d => d.description || d.id);
-    
-    // Add table info on second line
-    node.append('text')
-        .attr('text-anchor', 'middle')
-        .attr('dy', 58)
-        .attr('font-size', '10px')
-        .attr('fill', '#6b7280')
-        .text(d => {
-            const meta = d.metadata;
-            if (meta && meta.tableName && meta.tableName !== d.description) {
-                return `(${meta.tableName})`;
+            if (d.type === 'controller') return d.id.replace('Controller', '');
+            if (d.type === 'method') {
+                const method = d.metadata?.httpMethod || '';
+                const name = d.metadata?.actionName || d.id.split('.').pop();
+                return `${method} ${name}`;
             }
-            return '';
-        });
+            return d.description || d.id;
+        })
+        .style('font-size', '11px');
     
-    // Add tooltips
-    node.append('title')
-        .text(d => {
-            const meta = d.metadata || {};
-            let tooltip = `${d.description}\n`;
-            tooltip += `Type: ${d.type}\n`;
-            if (meta.tableName) tooltip += `Table: ${meta.tableName}\n`;
-            if (meta.schema) tooltip += `Schema: ${meta.schema}\n`;
-            if (meta.primaryKeys && meta.primaryKeys.length) {
-                tooltip += `Primary Keys: ${meta.primaryKeys.join(', ')}\n`;
-            }
-            if (meta.columns) {
-                tooltip += `Columns: ${meta.columns.length}\n`;
-            }
-            return tooltip;
-        });
-    
-    // Update positions on simulation tick
     simulation.on('tick', () => {
         link
             .attr('x1', d => d.source.x)
@@ -1610,12 +1612,342 @@ function renderDatabaseView() {
             .attr('x2', d => d.target.x)
             .attr('y2', d => d.target.y);
         
-        linkLabel
-            .attr('x', d => (d.source.x + d.target.x) / 2)
-            .attr('y', d => (d.source.y + d.target.y) / 2);
-        
         node.attr('transform', d => `translate(${d.x},${d.y})`);
     });
+}
+
+// Render Database View - Detail Mode (New Implementation)
+function renderDatabaseViewDetail() {
+    if (!databaseData) return;
+    
+    const svg = d3.select('#databaseCanvas');
+    svg.selectAll('*').remove();
+    
+    const container = document.querySelector('#databaseView');
+    if (!container) return;
+    
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    
+    svg.attr('width', width).attr('height', height);
+    
+    const g = svg.append('g');
+    
+    // Add zoom behavior
+    const zoom = d3.zoom()
+        .scaleExtent([0.1, 4])
+        .on('zoom', (event) => {
+            g.attr('transform', event.transform);
+        });
+    
+    svg.call(zoom);
+    
+    // Define arrow markers for connections
+    const defs = svg.append('defs');
+    
+    // Arrow marker for one-to-one
+    defs.append('marker')
+        .attr('id', 'arrowhead-one-to-one')
+        .attr('markerWidth', 10)
+        .attr('markerHeight', 10)
+        .attr('refX', 9)
+        .attr('refY', 3)
+        .attr('orient', 'auto')
+        .append('polygon')
+        .attr('points', '0 0, 10 3, 0 6')
+        .attr('fill', '#3b82f6');
+    
+    // Arrow marker for one-to-many
+    defs.append('marker')
+        .attr('id', 'arrowhead-one-to-many')
+        .attr('markerWidth', 10)
+        .attr('markerHeight', 10)
+        .attr('refX', 9)
+        .attr('refY', 3)
+        .attr('orient', 'auto')
+        .append('polygon')
+        .attr('points', '0 0, 10 3, 0 6')
+        .attr('fill', '#f59e0b');
+    
+    // Arrow marker for many-to-many
+    defs.append('marker')
+        .attr('id', 'arrowhead-many-to-many')
+        .attr('markerWidth', 10)
+        .attr('markerHeight', 10)
+        .attr('refX', 9)
+        .attr('refY', 3)
+        .attr('orient', 'auto')
+        .append('polygon')
+        .attr('points', '0 0, 10 3, 0 6')
+        .attr('fill', '#ef4444');
+    
+    // Prepare nodes with table structure
+    const nodes = databaseData.nodes.map(n => {
+        const meta = n.metadata || {};
+        const columns = meta.columns || [];
+        const rowHeight = 22;
+        const headerHeight = 30;
+        const tableWidth = 250;
+        const tableHeight = headerHeight + (columns.length * rowHeight);
+        
+        return {
+            ...n,
+            tableWidth,
+            tableHeight,
+            headerHeight,
+            rowHeight,
+            columns
+        };
+    });
+    
+    const links = databaseData.links.map(l => ({ ...l }));
+    
+    // Create force simulation
+    const simulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links)
+            .id(d => d.id)
+            .distance(300))
+        .force('charge', d3.forceManyBody().strength(-800))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(d => Math.max(d.tableWidth, d.tableHeight) / 2 + 50));
+    
+    // Create connection lines group (drawn first so they appear behind tables)
+    const linkGroup = g.append('g').attr('class', 'links');
+    
+    // Create table nodes group
+    const nodeGroup = g.append('g').attr('class', 'nodes');
+    
+    // Function to draw connection lines
+    function drawLinks() {
+        linkGroup.selectAll('*').remove();
+        
+        links.forEach(link => {
+            const source = typeof link.source === 'object' ? link.source : nodes.find(n => n.id === link.source);
+            const target = typeof link.target === 'object' ? link.target : nodes.find(n => n.id === link.target);
+            
+            if (!source || !target) return;
+            
+            const meta = link.metadata || {};
+            const sourceColumns = meta.foreignKeyColumns || [];
+            const targetColumns = meta.principalKeyColumns || [];
+            
+            // Determine connection color and style based on relationship type
+            let strokeColor = '#6b7280';
+            let markerEnd = '';
+            let strokeDasharray = 'none';
+            
+            switch (link.type) {
+                case 'one-to-one':
+                    strokeColor = '#3b82f6';
+                    markerEnd = 'url(#arrowhead-one-to-one)';
+                    break;
+                case 'one-to-many':
+                    strokeColor = '#f59e0b';
+                    markerEnd = 'url(#arrowhead-one-to-many)';
+                    break;
+                case 'many-to-many':
+                    strokeColor = '#ef4444';
+                    markerEnd = 'url(#arrowhead-many-to-many)';
+                    strokeDasharray = '5,5';
+                    break;
+            }
+            
+            // Draw connection for each column pair
+            if (sourceColumns.length > 0 && targetColumns.length > 0) {
+                sourceColumns.forEach((sourceCol, idx) => {
+                    const targetCol = targetColumns[idx] || targetColumns[0];
+                    
+                    // Find row position for source column
+                    const sourceRowIdx = source.columns.findIndex(c => c.Name === sourceCol);
+                    const sourceY = source.y - source.tableHeight / 2 + source.headerHeight + (sourceRowIdx + 0.5) * source.rowHeight;
+                    const sourceX = source.x + source.tableWidth / 2;
+                    
+                    // Find row position for target column
+                    const targetRowIdx = target.columns.findIndex(c => c.Name === targetCol);
+                    const targetY = target.y - target.tableHeight / 2 + target.headerHeight + (targetRowIdx + 0.5) * target.rowHeight;
+                    const targetX = target.x - target.tableWidth / 2;
+                    
+                    // Draw curved path
+                    const path = linkGroup.append('path')
+                        .attr('class', `db-connection-line ${link.type}`)
+                        .attr('d', `M ${sourceX} ${sourceY} C ${sourceX + 50} ${sourceY}, ${targetX - 50} ${targetY}, ${targetX} ${targetY}`)
+                        .attr('stroke', strokeColor)
+                        .attr('stroke-width', 2)
+                        .attr('stroke-dasharray', strokeDasharray)
+                        .attr('marker-end', markerEnd)
+                        .attr('fill', 'none');
+                    
+                    // Add tooltip
+                    path.append('title')
+                        .text(`${sourceCol} → ${targetCol}\n${link.type}\n${meta.deleteAction || ''}`);
+                    
+                    // Add connection label (only for first connection)
+                    if (idx === 0) {
+                        const midX = (sourceX + targetX) / 2;
+                        const midY = (sourceY + targetY) / 2;
+                        
+                        linkGroup.append('text')
+                            .attr('class', 'db-connection-label')
+                            .attr('x', midX)
+                            .attr('y', midY - 5)
+                            .attr('text-anchor', 'middle')
+                            .text(link.type);
+                    }
+                });
+            } else {
+                // Fallback: draw simple line between table centers
+                const path = linkGroup.append('line')
+                    .attr('class', `db-connection-line ${link.type}`)
+                    .attr('x1', source.x)
+                    .attr('y1', source.y)
+                    .attr('x2', target.x)
+                    .attr('y2', target.y)
+                    .attr('stroke', strokeColor)
+                    .attr('stroke-width', 2)
+                    .attr('stroke-dasharray', strokeDasharray)
+                    .attr('marker-end', markerEnd);
+                
+                path.append('title')
+                    .text(`${link.type}\n${meta.deleteAction || ''}`);
+            }
+        });
+    }
+    
+    // Create table nodes
+    const node = nodeGroup.selectAll('g')
+        .data(nodes)
+        .enter()
+        .append('g')
+        .attr('class', 'db-table-node')
+        .call(d3.drag()
+            .on('start', dragstarted)
+            .on('drag', dragged)
+            .on('end', dragended));
+    
+    // Draw each table
+    nodes.forEach((tableNode, nodeIdx) => {
+        const nodeG = d3.select(node.nodes()[nodeIdx]);
+        const meta = tableNode.metadata || {};
+        const isJoinTable = tableNode.type === 'join_table';
+        const primaryKeys = meta.primaryKeys || [];
+        
+        // Table header background
+        nodeG.append('rect')
+            .attr('class', isJoinTable ? 'db-join-table-header' : 'db-table-header')
+            .attr('x', -tableNode.tableWidth / 2)
+            .attr('y', -tableNode.tableHeight / 2)
+            .attr('width', tableNode.tableWidth)
+            .attr('height', tableNode.headerHeight)
+            .attr('rx', 8)
+            .attr('ry', 8);
+        
+        // Table name
+        nodeG.append('text')
+            .attr('class', 'db-table-header-text')
+            .attr('x', 0)
+            .attr('y', -tableNode.tableHeight / 2 + tableNode.headerHeight / 2 + 5)
+            .attr('text-anchor', 'middle')
+            .text(tableNode.description || tableNode.id);
+        
+        // Table icon
+        nodeG.append('text')
+            .attr('class', 'db-table-header-text')
+            .attr('x', -tableNode.tableWidth / 2 + 15)
+            .attr('y', -tableNode.tableHeight / 2 + tableNode.headerHeight / 2 + 5)
+            .attr('text-anchor', 'middle')
+            .attr('font-size', '16px')
+            .text(isJoinTable ? '⚡' : '📊');
+        
+        // Table body background
+        nodeG.append('rect')
+            .attr('class', 'db-table-body')
+            .attr('x', -tableNode.tableWidth / 2)
+            .attr('y', -tableNode.tableHeight / 2 + tableNode.headerHeight)
+            .attr('width', tableNode.tableWidth)
+            .attr('height', tableNode.tableHeight - tableNode.headerHeight)
+            .attr('rx', 0)
+            .attr('ry', 0);
+        
+        // Draw column rows
+        tableNode.columns.forEach((column, idx) => {
+            const rowY = -tableNode.tableHeight / 2 + tableNode.headerHeight + (idx * tableNode.rowHeight);
+            const isPK = primaryKeys.includes(column.name);
+            const isFK = column.IsForeignKey;
+            
+            // Row background
+            nodeG.append('rect')
+                .attr('class', 'db-table-row db-table-row-hover')
+                .attr('x', -tableNode.tableWidth / 2)
+                .attr('y', rowY)
+                .attr('width', tableNode.tableWidth)
+                .attr('height', tableNode.rowHeight);
+            
+            // Column divider
+            nodeG.append('line')
+                .attr('class', 'db-column-divider')
+                .attr('x1', -tableNode.tableWidth / 2 + tableNode.tableWidth * 0.6)
+                .attr('y1', rowY)
+                .attr('x2', -tableNode.tableWidth / 2 + tableNode.tableWidth * 0.6)
+                .attr('y2', rowY + tableNode.rowHeight);
+            
+            // PK/FK icon
+            if (isPK) {
+                nodeG.append('text')
+                    .attr('class', 'db-pk-icon')
+                    .attr('x', -tableNode.tableWidth / 2 + 10)
+                    .attr('y', rowY + tableNode.rowHeight / 2 + 4)
+                    .attr('font-size', '12px')
+                    .text('🔑');
+            } else if (isFK) {
+                nodeG.append('text')
+                    .attr('class', 'db-fk-icon')
+                    .attr('x', -tableNode.tableWidth / 2 + 10)
+                    .attr('y', rowY + tableNode.rowHeight / 2 + 4)
+                    .attr('font-size', '12px')
+                    .text('🔗');
+            }
+
+            // Column name
+            nodeG.append('text')
+                .attr('class', 'db-table-text')
+                .attr('x', -tableNode.tableWidth / 2 + 25)
+                .attr('y', rowY + tableNode.rowHeight / 2 + 4)
+                .attr('text-anchor', 'start')
+                .attr('font-weight', isPK ? 'bold' : 'normal')
+                .text(column.name);
+            
+            // Column type
+            nodeG.append('text')
+                .attr('class', 'db-table-text')
+                .attr('x', -tableNode.tableWidth / 2 + tableNode.tableWidth * 0.62)
+                .attr('y', rowY + tableNode.rowHeight / 2 + 4)
+                .attr('text-anchor', 'start')
+                .attr('fill', '#6b7280')
+                .text(column.type + (column.IsNullable ? '?' : ''));
+        });
+        
+        // Add shadow/border
+        nodeG.append('rect')
+            .attr('x', -tableNode.tableWidth / 2)
+            .attr('y', -tableNode.tableHeight / 2)
+            .attr('width', tableNode.tableWidth)
+            .attr('height', tableNode.tableHeight)
+            .attr('rx', 8)
+            .attr('ry', 8)
+            .attr('fill', 'none')
+            .attr('stroke', isJoinTable ? '#ec4899' : '#8b5cf6')
+            .attr('stroke-width', 2)
+            .style('filter', 'drop-shadow(0 4px 6px rgba(0, 0, 0, 0.1))');
+    });
+    
+    // Update positions on simulation tick
+    simulation.on('tick', () => {
+        node.attr('transform', d => `translate(${d.x},${d.y})`);
+        drawLinks();
+    });
+    
+    // Initial link drawing
+    drawLinks();
     
     // Drag functions
     function dragstarted(event, d) {

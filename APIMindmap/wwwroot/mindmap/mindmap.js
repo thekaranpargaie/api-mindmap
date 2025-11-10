@@ -85,7 +85,12 @@ function initializeVisualization() {
 // Load API data
 async function loadMindmapData() {
     try {
-        const response = await fetch('/api/mindmap');
+        // Try v3 endpoint first, fallback to legacy endpoint
+        let response = await fetch('/mindmap/index.json');
+        if (!response.ok) {
+            response = await fetch('/api/mindmap');
+        }
+        
         mindmapData = await response.json();
         
         // Cache data with size limit (5MB max)
@@ -254,8 +259,8 @@ function updateToolbarForView(viewName) {
     const tableControls = document.getElementById('tableControls');
     const svgExportItems = document.querySelectorAll('.export-svg-only');
     
-    // Graph views (mindmap, tree, dependency) show zoom controls
-    const isGraphView = ['mindmap', 'tree', 'dependency'].includes(viewName);
+    // Graph views (mindmap, tree, dependency, database) show zoom controls
+    const isGraphView = ['mindmap', 'tree', 'dependency', 'database'].includes(viewName);
     const isTableView = viewName === 'table';
     
     if (graphControls) {
@@ -296,6 +301,9 @@ function renderCurrentView() {
             break;
         case 'dashboard':
             renderDashboardView();
+            break;
+        case 'database':
+            renderDatabaseView();
             break;
     }
 }
@@ -1412,7 +1420,223 @@ function getSvgIdForCurrentView() {
             return 'treeCanvas';
         case 'dependency':
             return 'dependencyCanvas';
+        case 'database':
+            return 'databaseCanvas';
         default:
             return null;
     }
 }
+
+// ========================================
+// Database Analyzer Extension (v3)
+// ========================================
+
+let databaseData = null;
+
+// Check if database analyzer is enabled
+async function checkDatabaseAnalyzer() {
+    try {
+        const response = await fetch('/mindmap/database.json');
+        if (response.ok) {
+            databaseData = await response.json();
+            // Show database tab
+            const databaseTab = document.getElementById('databaseTab');
+            if (databaseTab) {
+                databaseTab.classList.remove('hidden');
+                lucide.createIcons();
+            }
+            return true;
+        }
+    } catch (error) {
+        // Database analyzer not available
+        console.log('Database Analyzer not available');
+    }
+    return false;
+}
+
+// Render Database View
+function renderDatabaseView() {
+    if (!databaseData) return;
+    
+    const svg = d3.select('#databaseCanvas');
+    svg.selectAll('*').remove();
+    
+    const container = document.querySelector('#databaseView');
+    if (!container) return;
+    
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    
+    svg.attr('width', width).attr('height', height);
+    
+    const g = svg.append('g');
+    
+    // Add zoom behavior
+    const zoom = d3.zoom()
+        .scaleExtent([0.1, 4])
+        .on('zoom', (event) => {
+            g.attr('transform', event.transform);
+        });
+    
+    svg.call(zoom);
+    
+    // Prepare nodes and links
+    const nodes = databaseData.nodes.map(n => ({ ...n }));
+    const links = databaseData.links.map(l => ({ ...l }));
+    
+    // Create force simulation
+    const simulation = d3.forceSimulation(nodes)
+        .force('link', d3.forceLink(links)
+            .id(d => d.id)
+            .distance(150))
+        .force('charge', d3.forceManyBody().strength(-400))
+        .force('center', d3.forceCenter(width / 2, height / 2))
+        .force('collision', d3.forceCollide().radius(50));
+    
+    // Color scale for different node types
+    const colorScale = {
+        'entity': '#8b5cf6', // Purple for entities
+        'join_table': '#ec4899', // Pink for join tables
+        'view': '#10b981' // Green for views
+    };
+    
+    // Relationship color scale
+    const linkColorScale = {
+        'one-to-one': '#3b82f6', // Blue
+        'one-to-many': '#f59e0b', // Orange
+        'many-to-many': '#ef4444' // Red
+    };
+    
+    // Create links
+    const link = g.append('g')
+        .attr('class', 'links')
+        .selectAll('line')
+        .data(links)
+        .enter()
+        .append('line')
+        .attr('stroke', d => linkColorScale[d.type] || '#6b7280')
+        .attr('stroke-width', 2)
+        .attr('stroke-opacity', 0.6);
+    
+    // Create link labels for relationship types
+    const linkLabel = g.append('g')
+        .attr('class', 'link-labels')
+        .selectAll('text')
+        .data(links)
+        .enter()
+        .append('text')
+        .attr('font-size', '10px')
+        .attr('fill', '#6b7280')
+        .attr('text-anchor', 'middle')
+        .text(d => d.type);
+    
+    // Create nodes
+    const node = g.append('g')
+        .attr('class', 'nodes')
+        .selectAll('g')
+        .data(nodes)
+        .enter()
+        .append('g')
+        .attr('class', 'node')
+        .call(d3.drag()
+            .on('start', dragstarted)
+            .on('drag', dragged)
+            .on('end', dragended));
+    
+    // Add circles to nodes
+    node.append('circle')
+        .attr('r', d => d.type === 'join_table' ? 25 : 35)
+        .attr('fill', d => colorScale[d.type] || '#8b5cf6')
+        .attr('stroke', '#ffffff')
+        .attr('stroke-width', 2);
+    
+    // Add icons to nodes based on type
+    node.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', -5)
+        .attr('font-size', d => d.type === 'join_table' ? '16px' : '20px')
+        .attr('fill', '#ffffff')
+        .text(d => {
+            if (d.type === 'join_table') return '⚡';
+            if (d.type === 'view') return '👁';
+            return '📊';
+        });
+    
+    // Add labels to nodes
+    node.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', 45)
+        .attr('font-size', '12px')
+        .attr('font-weight', 'bold')
+        .attr('fill', currentTheme === 'dark' ? '#ffffff' : '#1f2937')
+        .text(d => d.description || d.id);
+    
+    // Add table info on second line
+    node.append('text')
+        .attr('text-anchor', 'middle')
+        .attr('dy', 58)
+        .attr('font-size', '10px')
+        .attr('fill', '#6b7280')
+        .text(d => {
+            const meta = d.metadata;
+            if (meta && meta.tableName && meta.tableName !== d.description) {
+                return `(${meta.tableName})`;
+            }
+            return '';
+        });
+    
+    // Add tooltips
+    node.append('title')
+        .text(d => {
+            const meta = d.metadata || {};
+            let tooltip = `${d.description}\n`;
+            tooltip += `Type: ${d.type}\n`;
+            if (meta.tableName) tooltip += `Table: ${meta.tableName}\n`;
+            if (meta.schema) tooltip += `Schema: ${meta.schema}\n`;
+            if (meta.primaryKeys && meta.primaryKeys.length) {
+                tooltip += `Primary Keys: ${meta.primaryKeys.join(', ')}\n`;
+            }
+            if (meta.columns) {
+                tooltip += `Columns: ${meta.columns.length}\n`;
+            }
+            return tooltip;
+        });
+    
+    // Update positions on simulation tick
+    simulation.on('tick', () => {
+        link
+            .attr('x1', d => d.source.x)
+            .attr('y1', d => d.source.y)
+            .attr('x2', d => d.target.x)
+            .attr('y2', d => d.target.y);
+        
+        linkLabel
+            .attr('x', d => (d.source.x + d.target.x) / 2)
+            .attr('y', d => (d.source.y + d.target.y) / 2);
+        
+        node.attr('transform', d => `translate(${d.x},${d.y})`);
+    });
+    
+    // Drag functions
+    function dragstarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+    }
+    
+    function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+    }
+    
+    function dragended(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+    }
+}
+
+// Initialize database analyzer on load
+document.addEventListener('DOMContentLoaded', () => {
+    checkDatabaseAnalyzer();
+});

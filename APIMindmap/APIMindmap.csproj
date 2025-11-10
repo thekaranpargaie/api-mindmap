@@ -15,8 +15,8 @@
     <PackageTags>aspnetcore;api;visualization;swagger;mindmap;documentation;asp.net-core;rest-api;openapi;endpoints;dto;controllers;webapi;microservices;api-documentation;dashboard;charts;d3js</PackageTags>
     <Copyright>Copyright © 2025 Karan Pargaien</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <PackageProjectUrl>https://github.com/karanpargaien-tz/APIMindmap</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/karanpargaien-tz/APIMindmap</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/thekaranpargaie/api-mindmap</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/thekaranpargaie/api-mindmap</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageReleaseNotes>Version 2.0 - Major upgrade with multiple visualization modes, dark/light themes, comprehensive export options, keyboard shortcuts, and advanced API insights dashboard</PackageReleaseNotes>

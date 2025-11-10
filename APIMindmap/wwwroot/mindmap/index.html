@@ -23,28 +23,30 @@
     <link rel="stylesheet" href="/mindmap/mindmap/mindmap.css">
 </head>
 <body class="font-inter bg-gray-50 dark:bg-gray-900 transition-colors">
-    <!-- Top Navigation Bar -->
-    <nav class="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div class="px-6 py-4">
-            <div class="flex items-center justify-between">
-                <div class="flex items-center space-x-4">
-                    <div class="flex items-center space-x-2">
-                        <i data-lucide="brain-circuit" class="w-8 h-8 text-indigo-600 dark:text-indigo-400"></i>
-                        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">API Mindmap</h1>
+    <!-- Top Navigation Bar - Fixed Header -->
+    <header class="api-mindmap-header">
+        <div class="header-container">
+            <div class="header-top">
+                <div class="header-branding">
+                    <div class="brand-icon">
+                        <i data-lucide="brain-circuit" class="w-7 h-7"></i>
                     </div>
-                    <span class="text-sm text-gray-500 dark:text-gray-400">Interactive API Insight Dashboard</span>
+                    <div class="brand-text">
+                        <h1 class="brand-title">API Mindmap</h1>
+                        <p class="brand-subtitle">Interactive API Insight Dashboard</p>
+                    </div>
                 </div>
-                <div class="flex items-center space-x-2">
-                    <button id="themeToggle" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Toggle theme">
-                        <i data-lucide="sun" class="w-5 h-5 text-gray-600 dark:text-gray-300"></i>
+                <div class="header-actions">
+                    <button id="themeToggle" class="header-btn" title="Toggle theme (T)">
+                        <i data-lucide="sun" class="w-5 h-5"></i>
                     </button>
-                    <button id="fullscreenBtn" class="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" title="Fullscreen (F)">
-                        <i data-lucide="maximize" class="w-5 h-5 text-gray-600 dark:text-gray-300"></i>
+                    <button id="fullscreenBtn" class="header-btn" title="Fullscreen (F)">
+                        <i data-lucide="maximize" class="w-5 h-5"></i>
                     </button>
                 </div>
             </div>
             <!-- View Tabs -->
-            <div class="mt-4 flex space-x-1 border-b border-gray-200 dark:border-gray-700">
+            <nav class="header-tabs">
                 <button class="view-tab active" data-view="mindmap">
                     <i data-lucide="network" class="w-4 h-4"></i>
                     <span>Mindmap</span>
@@ -69,20 +71,21 @@
                     <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
                     <span>Dashboard</span>
                 </button>
-            </div>
+            </nav>
         </div>
-    </nav>
+    </header>
 
     <!-- Sticky Toolbar -->
-    <div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-2">
+    <div class="toolbar-container">
+        <div class="toolbar-inner">
+            <div class="toolbar-left">
                 <button id="refreshBtn" class="toolbar-btn">
                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                     <span>Refresh</span>
                 </button>
                 <!-- Graph Controls (Mindmap, Tree, Dependency) -->
-                <div id="graphControls" class="flex items-center space-x-2">
+                <div id="graphControls" class="toolbar-group">
+                    <div class="toolbar-divider"></div>
                     <button id="zoomInBtn" class="toolbar-btn">
                         <i data-lucide="zoom-in" class="w-4 h-4"></i>
                         <span>Zoom In</span>
@@ -97,16 +100,18 @@
                     </button>
                 </div>
                 <!-- Table Controls -->
-                <div id="tableControls" class="hidden flex items-center space-x-2">
-                    <div class="relative">
+                <div id="tableControls" class="hidden toolbar-group">
+                    <div class="toolbar-divider"></div>
+                    <div class="toolbar-search">
+                        <i data-lucide="search" class="search-icon w-4 h-4"></i>
                         <input type="text" id="tableSearchInput" placeholder="Filter endpoints..." 
-                            class="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                            class="toolbar-input" />
                     </div>
                 </div>
             </div>
-            <div class="flex items-center space-x-2">
-                <div class="relative">
-                    <button id="exportBtn" class="toolbar-btn">
+            <div class="toolbar-right">
+                <div class="export-dropdown">
+                    <button id="exportBtn" class="toolbar-btn toolbar-btn-primary">
                         <i data-lucide="download" class="w-4 h-4"></i>
                         <span>Export</span>
                         <i data-lucide="chevron-down" class="w-4 h-4"></i>
@@ -143,46 +148,46 @@
     </div>
     
     <!-- Main Container -->
-    <div class="flex h-[calc(100vh-180px)]">
+    <div class="main-layout">
         <!-- Sidebar -->
-        <aside class="w-80 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 overflow-y-auto">
-            <div class="p-6">
-                <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                    <i data-lucide="info" class="w-5 h-5 mr-2 text-indigo-600 dark:text-indigo-400"></i>
+        <aside class="sidebar">
+            <div class="sidebar-content">
+                <h3 class="sidebar-heading">
+                    <i data-lucide="info" class="w-5 h-5"></i>
                     API Statistics
                 </h3>
-                <div id="stats" class="space-y-3"></div>
+                <div id="stats" class="sidebar-stats"></div>
                 
-                <div class="mt-6">
-                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white mb-3 flex items-center">
-                        <i data-lucide="palette" class="w-4 h-4 mr-2 text-indigo-600 dark:text-indigo-400"></i>
+                <div class="sidebar-section">
+                    <h4 class="sidebar-subheading">
+                        <i data-lucide="palette" class="w-4 h-4"></i>
                         Legend
                     </h4>
-                    <div id="legend" class="space-y-2"></div>
+                    <div id="legend" class="sidebar-legend"></div>
                 </div>
                 
-                <div class="mt-6">
-                    <label class="text-sm font-semibold text-gray-900 dark:text-white mb-2 flex items-center">
-                        <i data-lucide="search" class="w-4 h-4 mr-2 text-indigo-600 dark:text-indigo-400"></i>
+                <div class="sidebar-section">
+                    <label class="sidebar-label">
+                        <i data-lucide="search" class="w-4 h-4"></i>
                         Search
                     </label>
                     <input type="text" id="searchInput" placeholder="Search nodes..." 
-                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                        class="sidebar-input" />
                 </div>
 
-                <div id="insightsSidebar" class="mt-6 space-y-4">
-                    <h4 class="text-sm font-semibold text-gray-900 dark:text-white flex items-center">
-                        <i data-lucide="lightbulb" class="w-4 h-4 mr-2 text-indigo-600 dark:text-indigo-400"></i>
+                <div id="insightsSidebar" class="sidebar-section">
+                    <h4 class="sidebar-subheading">
+                        <i data-lucide="lightbulb" class="w-4 h-4"></i>
                         Insights
                     </h4>
-                    <div id="topDTOs" class="text-sm"></div>
-                    <div id="topControllers" class="text-sm"></div>
+                    <div id="topDTOs" class="sidebar-insights"></div>
+                    <div id="topControllers" class="sidebar-insights"></div>
                 </div>
             </div>
         </aside>
         
         <!-- Main Content Area -->
-        <main class="flex-1 relative bg-white dark:bg-gray-900">
+        <main class="content-area">
             <!-- Mindmap View -->
             <div id="mindmapView" class="view-content active">
                 <svg id="mindmap" class="w-full h-full"></svg>

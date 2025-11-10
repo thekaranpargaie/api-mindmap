@@ -71,6 +71,11 @@
                     <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
                     <span>Dashboard</span>
                 </button>
+                <!-- Database Analyzer Tab - Shown only when database analyzer is enabled -->
+                <button class="view-tab hidden" data-view="database" id="databaseTab">
+                    <i data-lucide="database" class="w-4 h-4"></i>
+                    <span>Database</span>
+                </button>
             </nav>
         </div>
     </header>
@@ -248,6 +253,11 @@
                         <canvas id="dtosChart"></canvas>
                     </div>
                 </div>
+            </div>
+            
+            <!-- Database Analyzer View -->
+            <div id="databaseView" class="view-content">
+                <svg id="databaseCanvas" class="w-full h-full"></svg>
             </div>
             
             <div id="tooltip" class="tooltip"></div>

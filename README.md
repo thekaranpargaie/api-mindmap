@@ -2,7 +2,8 @@
 
 **API Mindmap** is a powerful visualization dashboard for ASP.NET Core (6.0+) APIs. It auto-discovers all endpoints, controllers, and DTOs, and renders **multiple interactive views** — directly inside your API — just like Swagger UI, but with advanced visualization capabilities.
 
-![API Mindmap Screenshot](https://github.com/user-attachments/assets/46cb86dd-289b-4a24-b751-cbf9977264a6)
+<img width="1902" height="898" alt="Screenshot 2025-11-10 111220" src="https://github.com/user-attachments/assets/dfd45642-0a22-47aa-bbbb-33538f58ddaa" />
+
 
 ## ✨ What's New in v2.0
 

@@ -227,6 +227,7 @@
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">HTTP</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Route</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">DTOs</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Try It</th>
                             </tr>
                         </thead>
                         <tbody id="endpointsTableBody" class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700"></tbody>
@@ -270,6 +271,116 @@
             
             <div id="tooltip" class="tooltip"></div>
         </main>
+    </div>
+
+    <!-- Try It Panel -->
+    <div id="tryItOverlay" class="try-it-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="tryItPanelTitle">
+        <div id="tryItPanel" class="try-it-panel">
+            <div class="try-it-header">
+                <div class="try-it-header-info">
+                    <span id="tryItMethodBadge" class="try-it-method-badge">GET</span>
+                    <code id="tryItRoute" class="try-it-route">/api/endpoint</code>
+                </div>
+                <span id="tryItPanelTitle" class="sr-only">Try API Endpoint</span>
+                <button id="closeTryItBtn" class="try-it-close-btn" aria-label="Close panel (Esc)">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="try-it-tabs" role="tablist" aria-label="Request options">
+                <button class="try-it-tab active" data-tab="body" role="tab" aria-selected="true" aria-controls="tryItBodyTab">Body</button>
+                <button class="try-it-tab" data-tab="params" role="tab" aria-selected="false" aria-controls="tryItParamsTab">Query Params</button>
+                <button class="try-it-tab" data-tab="headers" role="tab" aria-selected="false" aria-controls="tryItHeadersTab">Headers</button>
+                <button class="try-it-tab" data-tab="auth" role="tab" aria-selected="false" aria-controls="tryItAuthTab">Auth</button>
+                <button class="try-it-tab" data-tab="history" role="tab" aria-selected="false" aria-controls="tryItHistoryTab">History</button>
+            </div>
+
+            <div class="try-it-tab-panels">
+                <!-- Body Tab -->
+                <div id="tryItBodyTab" class="try-it-tab-panel" role="tabpanel">
+                    <div class="try-it-field-group">
+                        <label class="try-it-label" for="tryItContentType">Content-Type</label>
+                        <select id="tryItContentType" class="try-it-select">
+                            <option value="application/json">application/json</option>
+                            <option value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</option>
+                            <option value="multipart/form-data">multipart/form-data</option>
+                            <option value="text/plain">text/plain</option>
+                        </select>
+                    </div>
+                    <div class="try-it-field-group">
+                        <label class="try-it-label" for="tryItRequestBody">Request Body</label>
+                        <textarea id="tryItRequestBody" class="try-it-textarea" placeholder="Enter request body..."></textarea>
+                        <div id="tryItBodyError" class="try-it-field-error hidden"></div>
+                    </div>
+                </div>
+
+                <!-- Query Params Tab -->
+                <div id="tryItParamsTab" class="try-it-tab-panel hidden" role="tabpanel">
+                    <div id="tryItParamsList" class="try-it-kv-list"></div>
+                    <button id="tryItAddParamBtn" class="try-it-add-row-btn">
+                        <i data-lucide="plus" class="w-4 h-4"></i> Add Parameter
+                    </button>
+                </div>
+
+                <!-- Headers Tab -->
+                <div id="tryItHeadersTab" class="try-it-tab-panel hidden" role="tabpanel">
+                    <div id="tryItHeadersList" class="try-it-kv-list"></div>
+                    <button id="tryItAddHeaderBtn" class="try-it-add-row-btn">
+                        <i data-lucide="plus" class="w-4 h-4"></i> Add Header
+                    </button>
+                </div>
+
+                <!-- Auth Tab -->
+                <div id="tryItAuthTab" class="try-it-tab-panel hidden" role="tabpanel">
+                    <div class="try-it-field-group">
+                        <label class="try-it-label" for="tryItBearerToken">Bearer Token</label>
+                        <input type="text" id="tryItBearerToken" class="try-it-input" placeholder="Enter bearer token..." autocomplete="off" />
+                    </div>
+                    <div class="try-it-field-group">
+                        <label class="try-it-label" for="tryItBaseUrl">Base URL Override</label>
+                        <input type="text" id="tryItBaseUrl" class="try-it-input" placeholder="https://api.example.com" autocomplete="off" />
+                        <p class="try-it-hint">Leave empty to use the current origin.</p>
+                    </div>
+                </div>
+
+                <!-- History Tab -->
+                <div id="tryItHistoryTab" class="try-it-tab-panel hidden" role="tabpanel">
+                    <div id="tryItHistoryList" class="try-it-history-list"></div>
+                    <button id="tryItClearHistoryBtn" class="try-it-clear-history-btn">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i> Clear History
+                    </button>
+                </div>
+            </div>
+
+            <div class="try-it-actions">
+                <div id="tryItValidationErrors" class="try-it-validation-errors hidden"></div>
+                <button id="tryItSendBtn" class="try-it-send-btn">
+                    <i data-lucide="send" class="w-4 h-4"></i>
+                    <span>Send</span>
+                </button>
+            </div>
+
+            <!-- Response Area -->
+            <div id="tryItResponseArea" class="try-it-response hidden">
+                <div class="try-it-response-header">
+                    <span class="try-it-response-title">Response</span>
+                    <div class="try-it-response-meta">
+                        <span id="tryItStatusBadge" class="try-it-status-badge"></span>
+                        <span id="tryItResponseTime" class="try-it-response-time"></span>
+                        <button id="tryItCopyBtn" class="try-it-copy-btn" title="Copy response body">
+                            <i data-lucide="copy" class="w-4 h-4"></i>
+                            <span>Copy</span>
+                        </button>
+                    </div>
+                </div>
+                <button id="tryItHeadersToggleBtn" class="try-it-headers-toggle" aria-expanded="false" aria-controls="tryItResponseHeaders">
+                    <i data-lucide="chevron-right" class="w-4 h-4 try-it-chevron"></i>
+                    Response Headers
+                </button>
+                <div id="tryItResponseHeaders" class="try-it-response-headers hidden"></div>
+                <pre id="tryItResponseBody" class="try-it-response-body"></pre>
+            </div>
+        </div>
     </div>
 
     <script src="/mindmap/mindmap/mindmap.js"></script>

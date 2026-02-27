@@ -594,7 +594,9 @@ function renderTableView() {
         }).filter(d => d).join(', ');
         
         const row = tbody.insertRow();
-        row.className = 'hover:bg-gray-50 dark:hover:bg-gray-800';
+        row.className = 'hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer';
+        row.setAttribute('aria-label', `Open Try It panel for ${method.metadata?.httpMethod || ''} ${method.metadata?.route || ''}`);
+        row.tabIndex = 0;
         row.innerHTML = `
             <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">${controller ? controller.description : ''}</td>
             <td class="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">${method.metadata?.actionName || ''}</td>
@@ -605,8 +607,27 @@ function renderTableView() {
             </td>
             <td class="px-4 py-3 text-sm font-mono text-gray-700 dark:text-gray-300">${method.metadata?.route || ''}</td>
             <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">${dtos}</td>
+            <td class="px-4 py-3">
+                <button class="try-it-btn" data-method-id="${method.id}" title="Open Try It panel for this endpoint">
+                    <i data-lucide="play" class="w-3 h-3"></i> Try It
+                </button>
+            </td>
         `;
+
+        row.addEventListener('click', (e) => {
+            openTryItPanel(method);
+        });
+        // Also support keyboard activation of the row
+        row.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                openTryItPanel(method);
+            }
+        });
     });
+
+    // Re-initialize Lucide icons for newly added elements
+    lucide.createIcons();
 }
 
 function getHttpMethodClass(method) {
@@ -1291,8 +1312,13 @@ function setupKeyboardShortcuts() {
             }
         }
         
-        // Escape: Clear search/highlights
+        // Escape: Clear search/highlights or close Try It panel
         if (e.key === 'Escape') {
+            const overlay = document.getElementById('tryItOverlay');
+            if (overlay && !overlay.classList.contains('hidden')) {
+                closeTryItPanel();
+                return;
+            }
             const searchInput = document.getElementById('searchInput');
             if (searchInput) {
                 searchInput.value = '';
@@ -1971,4 +1997,635 @@ function renderDatabaseViewDetail() {
 // Initialize database analyzer on load
 document.addEventListener('DOMContentLoaded', () => {
     checkDatabaseAnalyzer();
+});
+
+// ========================================
+// Try It Feature
+// ========================================
+
+const TRYIT_MAX_HISTORY = 50;
+
+let tryItCurrentMethod = null;
+let tryItHistory = JSON.parse(localStorage.getItem('tryItHistory') || '[]');
+
+/**
+ * Open the Try It panel for a given method node.
+ */
+function openTryItPanel(methodNode) {
+    tryItCurrentMethod = methodNode;
+
+    const overlay = document.getElementById('tryItOverlay');
+    const methodBadge = document.getElementById('tryItMethodBadge');
+    const routeEl = document.getElementById('tryItRoute');
+
+    const httpMethod = (methodNode.metadata?.httpMethod || 'GET').toUpperCase();
+    const route = methodNode.metadata?.route || '/';
+
+    // Set header
+    methodBadge.textContent = httpMethod;
+    methodBadge.className = `try-it-method-badge method-${httpMethod.toLowerCase()}`;
+    routeEl.textContent = route.startsWith('/') ? route : `/${route}`;
+
+    // Pre-fill body/params based on method and schema
+    const hasBody = ['POST', 'PUT', 'PATCH'].includes(httpMethod);
+    const bodyTextarea = document.getElementById('tryItRequestBody');
+    if (hasBody) {
+        bodyTextarea.value = generateExampleBody(methodNode);
+    } else {
+        bodyTextarea.value = '';
+    }
+
+    // Pre-fill path/query params from route pattern
+    const paramsList = document.getElementById('tryItParamsList');
+    paramsList.innerHTML = '';
+    const pathParams = extractPathParams(route);
+    pathParams.forEach(p => addTryItParamRow(p, '', true));
+
+    // Default headers
+    const headersList = document.getElementById('tryItHeadersList');
+    headersList.innerHTML = '';
+    addTryItHeaderRow('Accept', 'application/json');
+
+    // Reset auth fields (keep persisted token if set)
+    // (leave Bearer token as-is so users don't have to re-enter per request)
+
+    // Hide response area
+    const responseArea = document.getElementById('tryItResponseArea');
+    responseArea.classList.add('hidden');
+
+    // Hide validation errors
+    document.getElementById('tryItValidationErrors').classList.add('hidden');
+
+    // Switch to body tab
+    switchTryItTab('body');
+
+    // Load history tab
+    renderTryItHistory();
+
+    // Show panel
+    overlay.classList.remove('hidden');
+    lucide.createIcons();
+
+    // Focus close button for keyboard users
+    document.getElementById('closeTryItBtn').focus();
+}
+
+/**
+ * Close the Try It panel.
+ */
+function closeTryItPanel() {
+    const overlay = document.getElementById('tryItOverlay');
+    overlay.classList.add('hidden');
+    tryItCurrentMethod = null;
+}
+
+/**
+ * Switch active tab in the Try It panel.
+ */
+function switchTryItTab(tabName) {
+    document.querySelectorAll('.try-it-tab').forEach(btn => {
+        const isActive = btn.dataset.tab === tabName;
+        btn.classList.toggle('active', isActive);
+        btn.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+    document.querySelectorAll('.try-it-tab-panel').forEach(panel => {
+        const panelId = `tryIt${tabName.charAt(0).toUpperCase() + tabName.slice(1)}Tab`;
+        panel.classList.toggle('hidden', panel.id !== panelId);
+    });
+}
+
+/**
+ * Generate an example JSON body from linked DTO nodes.
+ */
+function generateExampleBody(methodNode) {
+    if (!mindmapData) return '{}';
+
+    // Find accepted DTOs
+    const acceptLinks = mindmapData.links.filter(
+        l => l.source === methodNode.id && l.type === 'accepts'
+    );
+
+    if (!acceptLinks.length) return '{}';
+
+    const dtoNode = mindmapData.nodes.find(n => n.id === acceptLinks[0].target && n.type === 'dto');
+    if (!dtoNode) return '{}';
+
+    const example = buildExampleFromDtoNode(dtoNode, new Set());
+    return JSON.stringify(example, null, 2);
+}
+
+/**
+ * Recursively build an example object from a DTO node.
+ */
+function buildExampleFromDtoNode(dtoNode, visited) {
+    if (visited.has(dtoNode.id)) return {};
+    visited.add(dtoNode.id);
+
+    const obj = {};
+
+    // Find properties referenced by this DTO
+    const refLinks = mindmapData.links.filter(
+        l => l.source === dtoNode.id && l.type === 'references'
+    );
+
+    if (refLinks.length) {
+        refLinks.forEach(link => {
+            const refNode = mindmapData.nodes.find(n => n.id === link.target);
+            if (refNode && refNode.type === 'dto') {
+                const key = lcFirst(refNode.metadata?.typeName || refNode.description || refNode.id);
+                obj[key] = buildExampleFromDtoNode(refNode, new Set(visited));
+            }
+        });
+    }
+
+    // If no nested references, generate example fields from the DTO name itself
+    if (!Object.keys(obj).length) {
+        const typeName = dtoNode.metadata?.typeName || dtoNode.description || '';
+        Object.assign(obj, guessExampleFields(typeName));
+    }
+
+    return obj;
+}
+
+/**
+ * Guess example fields based on DTO type name conventions.
+ */
+function guessExampleFields(typeName) {
+    const name = (typeName || '').toLowerCase();
+    const base = {};
+
+    if (name.includes('request') || name.includes('dto') || name.includes('model') || name === '') {
+        base.id = 0;
+        base.name = 'example';
+    }
+    if (name.includes('user') || name.includes('account')) {
+        return { id: 0, username: 'john_doe', email: 'john@example.com', active: true };
+    }
+    if (name.includes('product') || name.includes('item')) {
+        return { id: 0, name: 'Sample Product', price: 9.99, quantity: 1 };
+    }
+    if (name.includes('order')) {
+        return { id: 0, customerId: 1, items: [], totalAmount: 0.0 };
+    }
+    if (name.includes('address')) {
+        return { street: '123 Main St', city: 'Anytown', country: 'US', postalCode: '12345' };
+    }
+
+    return Object.keys(base).length ? base : { id: 0, value: 'example' };
+}
+
+function lcFirst(str) {
+    return str ? str.charAt(0).toLowerCase() + str.slice(1) : str;
+}
+
+/**
+ * Extract {param} tokens from a route pattern.
+ */
+function extractPathParams(route) {
+    const matches = (route || '').match(/\{([^}:?]+)[^}]*\}/g) || [];
+    return matches.map(m => m.replace(/[{}]/g, '').split(':')[0].split('?')[0]);
+}
+
+/**
+ * Add a key-value row to the query params list.
+ */
+function addTryItParamRow(name, value, required) {
+    const list = document.getElementById('tryItParamsList');
+    const row = document.createElement('div');
+    row.className = `try-it-kv-row${required ? ' required-row' : ''}`;
+    const requiredAttrs = required ? 'readonly aria-required="true"' : '';
+    row.innerHTML = `
+        <input class="try-it-kv-key" type="text" value="${escapeHtml(name)}" placeholder="Parameter name" aria-label="Parameter name" ${requiredAttrs} />
+        <input class="try-it-kv-value" type="text" value="${escapeHtml(value)}" placeholder="Value" aria-label="Parameter value" ${required ? 'aria-required="true"' : ''} />
+        <button class="try-it-kv-remove" title="Remove" aria-label="Remove parameter">
+            <i data-lucide="x" class="w-3 h-3"></i>
+        </button>
+    `;
+    row.querySelector('.try-it-kv-remove').addEventListener('click', () => row.remove());
+    list.appendChild(row);
+    lucide.createIcons();
+}
+
+/**
+ * Add a key-value row to the headers list.
+ */
+function addTryItHeaderRow(name, value) {
+    const list = document.getElementById('tryItHeadersList');
+    const row = document.createElement('div');
+    row.className = 'try-it-kv-row';
+    row.innerHTML = `
+        <input class="try-it-kv-key" type="text" value="${escapeHtml(name)}" placeholder="Header name" aria-label="Header name" />
+        <input class="try-it-kv-value" type="text" value="${escapeHtml(value)}" placeholder="Value" aria-label="Header value" />
+        <button class="try-it-kv-remove" title="Remove" aria-label="Remove header">
+            <i data-lucide="x" class="w-3 h-3"></i>
+        </button>
+    `;
+    row.querySelector('.try-it-kv-remove').addEventListener('click', () => row.remove());
+    list.appendChild(row);
+    lucide.createIcons();
+}
+
+/**
+ * Build the full request URL from base URL, route, and query params.
+ */
+function buildTryItUrl() {
+    const baseUrl = (document.getElementById('tryItBaseUrl').value || '').trim()
+        || window.location.origin;
+    const cleanBase = baseUrl.replace(/\/$/, '');
+
+    let route = (tryItCurrentMethod?.metadata?.route || '').trim();
+    if (!route.startsWith('/')) route = '/' + route;
+
+    // Substitute path params
+    document.querySelectorAll('#tryItParamsList .try-it-kv-row').forEach(row => {
+        const key = row.querySelector('.try-it-kv-key')?.value?.trim();
+        const val = row.querySelector('.try-it-kv-value')?.value?.trim();
+        if (key && route.includes(`{${key}`)) {
+            route = route.replace(new RegExp(`\\{${key}[^}]*\\}`), encodeURIComponent(val || ''));
+        }
+    });
+
+    // Collect remaining non-path params as query string
+    const queryParts = [];
+    document.querySelectorAll('#tryItParamsList .try-it-kv-row').forEach(row => {
+        const key = row.querySelector('.try-it-kv-key')?.value?.trim();
+        const val = row.querySelector('.try-it-kv-value')?.value?.trim();
+        if (key && !route.includes(`{${key}`)) {
+            queryParts.push(`${encodeURIComponent(key)}=${encodeURIComponent(val || '')}`);
+        }
+    });
+
+    const qs = queryParts.length ? '?' + queryParts.join('&') : '';
+    return `${cleanBase}${route}${qs}`;
+}
+
+/**
+ * Collect headers from the headers list and auth fields.
+ */
+function collectTryItHeaders() {
+    const headers = {};
+
+    // Content-Type for methods that send a body
+    const httpMethod = (tryItCurrentMethod?.metadata?.httpMethod || 'GET').toUpperCase();
+    if (['POST', 'PUT', 'PATCH'].includes(httpMethod)) {
+        const contentType = document.getElementById('tryItContentType').value;
+        if (contentType !== 'multipart/form-data') {
+            // Let the browser set content-type for multipart
+            headers['Content-Type'] = contentType;
+        }
+    }
+
+    // Custom headers
+    document.querySelectorAll('#tryItHeadersList .try-it-kv-row').forEach(row => {
+        const key = row.querySelector('.try-it-kv-key')?.value?.trim();
+        const val = row.querySelector('.try-it-kv-value')?.value?.trim();
+        if (key) headers[key] = val || '';
+    });
+
+    // Bearer token
+    const token = document.getElementById('tryItBearerToken').value.trim();
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    return headers;
+}
+
+/**
+ * Validate the request before sending.
+ * Returns an array of error strings (empty = valid).
+ */
+function validateTryItRequest() {
+    const errors = [];
+    const httpMethod = (tryItCurrentMethod?.metadata?.httpMethod || 'GET').toUpperCase();
+
+    // Validate JSON body
+    if (['POST', 'PUT', 'PATCH'].includes(httpMethod)) {
+        const body = document.getElementById('tryItRequestBody').value.trim();
+        const contentType = document.getElementById('tryItContentType').value;
+        if (body && contentType === 'application/json') {
+            try { JSON.parse(body); } catch (err) {
+                errors.push(`Request body is not valid JSON: ${err.message}`);
+            }
+        }
+    }
+
+    // Validate required path params have values
+    document.querySelectorAll('#tryItParamsList .required-row').forEach(row => {
+        const key = row.querySelector('.try-it-kv-key')?.value?.trim();
+        const val = row.querySelector('.try-it-kv-value')?.value?.trim();
+        if (key && !val) {
+            errors.push(`Required parameter "${key}" must have a value.`);
+        }
+    });
+
+    return errors;
+}
+
+/**
+ * Send the API request and display the response.
+ */
+async function sendTryItRequest() {
+    if (!tryItCurrentMethod) return;
+
+    // Validate
+    const errors = validateTryItRequest();
+    const errorsEl = document.getElementById('tryItValidationErrors');
+    if (errors.length) {
+        errorsEl.textContent = errors.join(' ');
+        errorsEl.classList.remove('hidden');
+        return;
+    }
+    errorsEl.classList.add('hidden');
+
+    const sendBtn = document.getElementById('tryItSendBtn');
+    sendBtn.disabled = true;
+    sendBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Sending...</span>';
+    lucide.createIcons();
+
+    const httpMethod = (tryItCurrentMethod.metadata?.httpMethod || 'GET').toUpperCase();
+    const url = buildTryItUrl();
+    const headers = collectTryItHeaders();
+
+    let bodyContent = null;
+    if (['POST', 'PUT', 'PATCH'].includes(httpMethod)) {
+        bodyContent = document.getElementById('tryItRequestBody').value.trim() || null;
+    }
+
+    const startTime = performance.now();
+    let status = 0;
+    let statusText = '';
+    let responseBody = '';
+    let responseHeaders = {};
+
+    try {
+        const response = await fetch(url, {
+            method: httpMethod,
+            headers,
+            body: bodyContent || undefined,
+            credentials: 'same-origin'
+        });
+
+        const elapsed = Math.round(performance.now() - startTime);
+        status = response.status;
+        statusText = response.statusText;
+
+        // Read headers
+        response.headers.forEach((val, key) => {
+            responseHeaders[key] = val;
+        });
+
+        // Read body
+        const contentType = response.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+            const json = await response.json();
+            responseBody = JSON.stringify(json, null, 2);
+        } else {
+            responseBody = await response.text();
+        }
+
+        displayTryItResponse(status, statusText, elapsed, responseHeaders, responseBody);
+        saveTryItHistory(httpMethod, url, status, bodyContent, headers);
+
+    } catch (err) {
+        const elapsed = Math.round(performance.now() - startTime);
+        displayTryItResponse(0, 'Network Error', elapsed, {}, err.message);
+    } finally {
+        sendBtn.disabled = false;
+        sendBtn.innerHTML = '<i data-lucide="send" class="w-4 h-4"></i><span>Send</span>';
+        lucide.createIcons();
+    }
+}
+
+/**
+ * Display response data in the response area.
+ */
+function displayTryItResponse(status, statusText, elapsed, headers, body) {
+    const responseArea = document.getElementById('tryItResponseArea');
+    const statusBadge = document.getElementById('tryItStatusBadge');
+    const responseTime = document.getElementById('tryItResponseTime');
+    const responseHeadersEl = document.getElementById('tryItResponseHeaders');
+    const responseBodyEl = document.getElementById('tryItResponseBody');
+
+    // Status badge class
+    let statusClass = 'status-5xx';
+    if (status >= 200 && status < 300) statusClass = 'status-2xx';
+    else if (status >= 300 && status < 400) statusClass = 'status-3xx';
+    else if (status >= 400 && status < 500) statusClass = 'status-4xx';
+
+    statusBadge.textContent = status ? `${status} ${statusText}` : statusText;
+    statusBadge.className = `try-it-status-badge ${statusClass}`;
+    responseTime.textContent = elapsed ? `${elapsed}ms` : '';
+
+    // Response headers
+    const headersText = Object.entries(headers)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join('\n');
+    responseHeadersEl.textContent = headersText || '(no headers)';
+    responseHeadersEl.classList.add('hidden');
+    const headersToggle = document.getElementById('tryItHeadersToggleBtn');
+    if (headersToggle) headersToggle.setAttribute('aria-expanded', 'false');
+    const chevron = headersToggle?.querySelector('.try-it-chevron');
+    if (chevron) chevron.style.transform = '';
+
+    // Response body
+    responseBodyEl.textContent = body || '(empty response)';
+
+    responseArea.classList.remove('hidden');
+    responseArea.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+/**
+ * Toggle the response headers section visibility.
+ */
+function toggleTryItResponseHeaders() {
+    const headersEl = document.getElementById('tryItResponseHeaders');
+    const toggleBtn = document.getElementById('tryItHeadersToggleBtn');
+    const isHidden = headersEl.classList.toggle('hidden');
+    toggleBtn?.setAttribute('aria-expanded', isHidden ? 'false' : 'true');
+}
+
+/**
+ * Copy the response body to the clipboard.
+ */
+function copyTryItResponse() {
+    const body = document.getElementById('tryItResponseBody').textContent;
+    navigator.clipboard.writeText(body).then(() => {
+        const btn = document.getElementById('tryItCopyBtn')?.querySelector('span');
+        if (btn) {
+            const orig = btn.textContent;
+            btn.textContent = 'Copied!';
+            setTimeout(() => { btn.textContent = orig; }, 1500);
+        }
+    }).catch(() => {
+        // Fallback for older browsers (document.execCommand is deprecated but kept for compatibility)
+        const ta = document.createElement('textarea');
+        ta.value = body;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy'); // eslint-disable-line no-restricted-globals
+        document.body.removeChild(ta);
+    });
+}
+
+/**
+ * Save a request/response pair to history.
+ */
+function saveTryItHistory(method, url, status, body, headers) {
+    const entry = {
+        method,
+        url,
+        status,
+        body: body || '',
+        headers,
+        timestamp: new Date().toISOString()
+    };
+    tryItHistory.unshift(entry);
+    if (tryItHistory.length > TRYIT_MAX_HISTORY) tryItHistory.length = TRYIT_MAX_HISTORY;
+    try {
+        localStorage.setItem('tryItHistory', JSON.stringify(tryItHistory));
+    } catch { /* ignore storage errors */ }
+    renderTryItHistory();
+}
+
+/**
+ * Render history items in the history tab.
+ */
+function renderTryItHistory() {
+    const list = document.getElementById('tryItHistoryList');
+    if (!list) return;
+    list.innerHTML = '';
+
+    if (!tryItHistory.length) {
+        list.innerHTML = '<p style="color:var(--color-text-quaternary);font-size:0.8125rem;padding:0.5rem 0;">No history yet. Send a request to record it here.</p>';
+        return;
+    }
+
+    tryItHistory.forEach((entry, idx) => {
+        const item = document.createElement('button');
+        item.className = 'try-it-history-item';
+        item.title = `${entry.method} ${entry.url} — ${entry.timestamp}`;
+
+        let statusClass = 'status-5xx';
+        if (entry.status >= 200 && entry.status < 300) statusClass = 'status-2xx';
+        else if (entry.status >= 400 && entry.status < 500) statusClass = 'status-4xx';
+
+        const httpLower = (entry.method || '').toLowerCase();
+        item.innerHTML = `
+            <span class="try-it-history-method try-it-method-badge method-${httpLower}">${escapeHtml(entry.method)}</span>
+            <span class="try-it-history-route">${escapeHtml(entry.url)}</span>
+            <span class="try-it-history-status ${statusClass}">${entry.status || 'ERR'}</span>
+        `;
+
+        item.addEventListener('click', () => restoreTryItFromHistory(idx));
+        list.appendChild(item);
+    });
+    lucide.createIcons();
+}
+
+/**
+ * Restore request fields from a history entry.
+ */
+function restoreTryItFromHistory(idx) {
+    const entry = tryItHistory[idx];
+    if (!entry) return;
+
+    // Restore body
+    document.getElementById('tryItRequestBody').value = entry.body || '';
+
+    // Restore headers (skip Content-Type and Authorization which are managed elsewhere)
+    const headersList = document.getElementById('tryItHeadersList');
+    headersList.innerHTML = '';
+    Object.entries(entry.headers || {}).forEach(([k, v]) => {
+        if (k.toLowerCase() !== 'authorization' && k.toLowerCase() !== 'content-type') {
+            addTryItHeaderRow(k, v);
+        }
+        if (k.toLowerCase() === 'authorization' && v.startsWith('Bearer ')) {
+            document.getElementById('tryItBearerToken').value = v.slice(7);
+        }
+    });
+
+    switchTryItTab('body');
+}
+
+/**
+ * Clear the request history.
+ */
+function clearTryItHistory() {
+    tryItHistory = [];
+    localStorage.removeItem('tryItHistory');
+    renderTryItHistory();
+}
+
+/**
+ * Escape HTML to prevent XSS when inserting untrusted data into innerHTML.
+ */
+function escapeHtml(str) {
+    return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+// Wire up Try It panel event listeners once the DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    // Close on overlay backdrop click
+    const overlay = document.getElementById('tryItOverlay');
+    if (overlay) {
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeTryItPanel();
+        });
+    }
+
+    // Close button
+    const closeBtn = document.getElementById('closeTryItBtn');
+    if (closeBtn) {
+        closeBtn.addEventListener('click', closeTryItPanel);
+    }
+
+    // Send button
+    const sendBtn = document.getElementById('tryItSendBtn');
+    if (sendBtn) {
+        sendBtn.addEventListener('click', sendTryItRequest);
+    }
+
+    // Add Parameter button
+    const addParamBtn = document.getElementById('tryItAddParamBtn');
+    if (addParamBtn) {
+        addParamBtn.addEventListener('click', () => addTryItParamRow('', '', false));
+    }
+
+    // Add Header button
+    const addHeaderBtn = document.getElementById('tryItAddHeaderBtn');
+    if (addHeaderBtn) {
+        addHeaderBtn.addEventListener('click', () => addTryItHeaderRow('', ''));
+    }
+
+    // Copy response button
+    const copyBtn = document.getElementById('tryItCopyBtn');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', copyTryItResponse);
+    }
+
+    // Response headers toggle
+    const headersToggleBtn = document.getElementById('tryItHeadersToggleBtn');
+    if (headersToggleBtn) {
+        headersToggleBtn.addEventListener('click', toggleTryItResponseHeaders);
+    }
+
+    // Clear history button
+    const clearHistoryBtn = document.getElementById('tryItClearHistoryBtn');
+    if (clearHistoryBtn) {
+        clearHistoryBtn.addEventListener('click', clearTryItHistory);
+    }
+
+    // Tab switching
+    document.querySelectorAll('.try-it-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            switchTryItTab(tab.dataset.tab);
+            if (tab.dataset.tab === 'history') renderTryItHistory();
+        });
+    });
 });
